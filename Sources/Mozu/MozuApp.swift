@@ -121,13 +121,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         }
 
         // 確定キーは別プロセスに非同期で届く。即 TISSelectInputSource を呼ぶと
-        // 切り替えが先に走り、確定キーが切り替え先のフィールドに落ちて
-        // 改行になる。少し待ってから選択する。
+        // 切り替えが先に走り、確定が未完のまま marked text が棚上げされる
+        // （確定キーが切り替え先に落ちて改行になるのも同じ競争の別側面）。
+        // 少し待ってから選択する。速さより順序が目的なので、短くして
+        // 裏残りが再発したら戻す。
         let work = DispatchWorkItem { [weak self] in
             self?.applySelect(id: id)
         }
         pendingSwitch = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.06, execute: work)
     }
 
     private func applySelect(id: String) {
