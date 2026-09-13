@@ -1,0 +1,37 @@
+/* Menu bar */
+"今すぐ切り替える" = "Switch Input Source";
+"設定…" = "Settings…";
+"ログイン時に起動" = "Launch at Login";
+"権限を許可する" = "Grant Permissions";
+"再起動" = "Restart";
+"終了" = "Quit";
+"利用可能な入力ソースがありません" = "No input sources available";
+
+/* Settings window */
+"状態" = "Status";
+"アクセシビリティ" = "Accessibility";
+"入力監視" = "Input Monitoring";
+"許可済み" = "Granted";
+"許可する…" = "Grant…";
+"文字入力の検出には入力監視、確定キーの注入にはアクセシビリティが必要です。両方の許可が必要です。" = "Detecting keystrokes requires Input Monitoring; injecting commit keys requires Accessibility. Both permissions are required.";
+"キー割り当て" = "Key Assignments";
+"システム設定 → キーボード → 入力ソースで、使う言語を追加してください。" = "Add the languages you use in System Settings → Keyboard → Input Sources.";
+"いずれも単発押しで発火します。他のキーと併用すれば通常の修飾キーとしてそのまま使えます。" = "Each triggers on a single tap. Held together with other keys, they still work as normal modifiers.";
+"バージョン" = "Version";
+"未設定" = "None";
+"Mozu 設定" = "Mozu Settings";
+
+/* Modifier keys */
+"左 Command" = "Left Command";
+"右 Command" = "Right Command";
+"左 Option" = "Left Option";
+"右 Option" = "Right Option";
+"左 Control" = "Left Control";
+"右 Control" = "Right Control";
+
+/* Input source mode suffixes */
+"ローマ字入力" = "Romaji input";
+"かな入力" = "Kana input";
+
+/* Separator between suffixes */
+"・" = " / ";
