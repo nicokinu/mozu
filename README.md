@@ -2,7 +2,9 @@
 
 <p align="center">
   <a href="README.md">English</a> |
-  <a href="README.ja.md">日本語</a>
+  <a href="README.ja.md">日本語</a> |
+  <a href="README.zh-CN.md">简体中文</a> |
+  <a href="README.zh-TW.md">繁體中文</a>
 </p>
 
 A macOS menu bar app that switches input sources on a **single tap** of a modifier key.
@@ -11,7 +13,7 @@ JIS keyboards have dedicated Kana/Eisu keys for Japanese, but there is no such k
 
 The name comes from the Japanese shrike (モズ). Its kanji name 百舌鳥 means "bird of a hundred tongues" — it is known for mimicking other birds.
 
-![demo](docs/assets/mozu-demo.mp4)
+![demo](docs/assets/mozu-demo.gif)
 
 ## How it works
 
@@ -75,8 +77,8 @@ Left/Right Control → (spare slots)
 ```
 
 <p float="left">
-  <img src="docs/assets/menu.png" width="280" />
-  <img src="docs/assets/settings.png" width="360" />
+  <img src="docs/assets/menu.png" width="406" />
+  <img src="docs/assets/settings.png" width="266" />
 </p>
 
 If two input sources share a display name (Kotoeri's romaji and kana modes both show "Hiragana"), Mozu appends an automatic suffix to tell them apart.

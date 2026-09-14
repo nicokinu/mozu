@@ -2,7 +2,9 @@
 
 <p align="center">
   <a href="README.md">English</a> |
-  <a href="README.ja.md">日本語</a>
+  <a href="README.ja.md">日本語</a> |
+  <a href="README.zh-CN.md">简体中文</a> |
+  <a href="README.zh-TW.md">繁體中文</a>
 </p>
 
 修飾キーの一回押しで入力ソースを切り替える Mac 用メニューバー常駐アプリです。
@@ -11,7 +13,7 @@ USキーボードで日本語と英語を切り替えるアプリには有名な
 
 名前のmozuは鳥のモズのことです。モズは百舌鳥（百の舌を持つ鳥）という名前のとおり、他の鳥の鳴き真似が上手だそうです。
 
-![demo](docs/assets/mozu-demo.mp4)
+![demo](docs/assets/mozu-demo.gif)
 
 ## 設計方針（なぜトグルではないか）
 
@@ -85,8 +87,8 @@ macOS 的には同じアプリとして扱われ、差し替えても許可は�
 割り当てはメニューから自由に変更できます。
 
 <p float="left">
-  <img src="docs/assets/menu.png" width="280" />
-  <img src="docs/assets/settings.png" width="360" />
+  <img src="docs/assets/menu.png" width="406" />
+  <img src="docs/assets/settings.png" width="266" />
 </p>
 
 ことえりのローマ字入力とかな入力のように、**別々の入力ソースが同じ表示名を持つ**
