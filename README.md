@@ -1,117 +1,31 @@
 # Mozu
 
-修飾キーの一回押しで入力ソースを切り替えるMac用メニューバー常駐アプリです。
-JISキーボードには「かな」「英数」キーがありますが、中国語やその他の言語に切り替えるボタンはありません。
-USキーボードで日本語と英語を切り替えるアプリには有名な[英かな](https://github.com/KS1019/eikana) があります。これを中国語やその他の言語でも使えるようにしたくて作りました。
+<p align="center">
+  <a href="README.md">English</a> |
+  <a href="README.ja.md">日本語</a>
+</p>
 
-名前のmozuは鳥のモズのことです。モズは百舌鳥（百の舌を持つ鳥）という名前のとおり、他の鳥の鳴き真似が上手だそうです。
+A macOS menu bar app that switches input sources on a **single tap** of a modifier key.
 
-## 設定例
-```
-左 Command  → 英語 (ABC)
-右 Command  → 日本語 (ひらがな)
-左 Option   → 簡体字中国語 (ピンイン)
-右 Option   → 繁体字中国語 (注音/ピンイン)
-左/右 Control → （予備スロット）
-```
-割り当てはメニューから自由に変更できます。
+JIS keyboards have dedicated Kana/Eisu keys for Japanese, but there is no such key for Chinese or any other language. [eikana](https://github.com/KS1019/eikana) is a well-known app that does this for Japanese/English on US keyboards. Mozu extends the idea to any input source.
 
-## 英かなとの重要な違い
+The name comes from the Japanese shrike (モズ). Its kanji name 百舌鳥 means "bird of a hundred tongues" — it is known for mimicking other birds.
 
-英かなは「 Cmd 単押し」を検出すると **英数キー（keycode 102）/ かなキー（keycode 104）をCGEvent で注入**する。これは日本語 IME がそのキーコードを受けてくれるから成立する仕組みで、中国語の IME では同じことができない。
+![demo](docs/assets/mozu-demo.mp4)
 
-Mozu の切り替えはキー入力をシミュレートせず、**Text Input Sources (TIS) API の `TISSelectInputSource` で入力ソースを直接選択**する。
-だから IME が何かによらず動く。
+## How it works
 
-……と思ったんだけど。
-TIS には変換中のまだ確定していない文字を確定させる API が無いので、IME 自身にキーを
-処理させるしかない。無理やり入力言語だけ切り替えると、確定前の文字列は裏で残ってしまうバグが発生する。
-これを解決するために、IMEにキーを処理させるしかなかった。つまり
-・日本語は英数/かな
-・中国語はReturn 
-のキー注入を使う。それから入力言語の切り替えを行う。
+Every assignment is **absolute**, never a toggle:
 
-| | 英かな | Mozu |
-|---|---|---|
-| トリガー | Cmd 単発押し | Cmd / Option / Control の単発押し |
-| 切り替え手段 | 英数・かなキーコード注入 | `TISSelectInputSource` |
-| 変換中の確定 | 英数/かなキーが兼任 | 確定キー注入（Return / 英数 / かな） |
-| 対応言語 | 日英 | 日本語・中国語・その他すべて(IMEの仕様による) |
-| 設定 | 組み合わせキーの設定もできる | メニューから6つのボタン固定で割り当て |
+- Releasing an assigned key selects that exact input source, whatever the current one is
+- If that source is already selected, nothing happens
+- It never interferes with normal shortcuts like `Cmd+C`: the tap only fires when the modifier is released and no other key was pressed in between
 
-## 設計方針（なぜトグルではないか）
+When you leave a Japanese or Chinese IME while a composition is still uncommitted, Mozu commits it first (via the Eisu key for Kotoeri, Return for Chinese IMEs) and only then switches. Nothing lingers invisibly in the background. As a side effect the cursor indicator may flash twice ("ABC", then the target language) — that is by design, see [docs/DESIGN.md](docs/DESIGN.md).
 
-中国語では一般的にShiftキーで中英の入力を切り替えます。
-中国語の時には英語に、英語の時は中国語に。
-しかしShiftでの中英トグルは「今どの言語になっているか」を画面を見て確認しなければなりません。
-確認のために視点を動かすと、そこに意識が飛んで思考が途切れます。
+## Install
 
-そこで Mozu は**絶対指定**だけを提供することにしました。
-
-- 割り当てたキーを離した瞬間に状態が決まる（現在の状態によって結果が変わらない）
-- すでに同じソースが選ばれていれば、そのまま何もしない
-- 既存のショートカット（`Cmd+C` など）には干渉しない。
-
-### 既知の問題
-
-変換中（marked text あり）のまま `TISSelectInputSource` で切り替えると、
-日本語や中国語のIMEは変換中文字列を確定ではなく「棚上げ」で保持する。
-画面からは消えるのに、あとで同じソースに戻した瞬間に再出現して混乱の原因になる。
-marked text の有無を外部から照会する公開 API はない（Accessibility に
-属性は存在しない）ので、Mozu はキー入力の観測で推定する:
-
-- 観測は `CGEventTap`（**セッションレベル** + listenOnly）。Apple Silicon では
-  HID レベルのタップに何も流れない。NSEvent のグローバルモニタでは
-  IME が消費前の keyDown を見られない。
-- IME 入力モードが選択されたあと、Return/Escape・クリック・アプリ切り替えで
-  終わっていない文字入力があれば「marked text が生きているかもしれない」
-- その状態で IME 系ソースから離れるときだけ確定キーを 1 発注入して
-  （約 60ms 待って）から切り替える
-- Secure Input（パスワードフィールド）は marked text を作らないので確定しない
-
-この推定には **keyDown が観測できなければならない**。keyDown の観測には
-「入力監視（Input Monitoring）」の TCC が必要で、無い場合はタップが張れるのに
-イベントが黙って deliver されない。しかも flagsChanged だけは通るので
-「切り替えは動くのに確定だけ壊れる」という一番わかりにくい壊れ方をする
-（まさに今回のバグの隠れ主因）。よって Mozu は両権限が揃ってからタップを張る。
-
-確定キーは IME で使い分ける。中国語 IME は Return 注入でそのまま確定する
-（拼音がアルファベットのままで残るのは Return 確定の仕様）。一方ことえりは
-Return を注入しても確定が非同期で、直後の切り替えに負けてもっと text が
-棚上げされたままになる（Return 自体は IME が消費するので改行にはならない）。
-日本語ソースでは**英数キー（keycode 102）**を撃って IME 自身に確定させる。
-
-英数は同じ入力ソース内のトグルなので、ことえりは英数状態のままソースを
-離れると、あとで「平仮名」を選び直しても英数状態が復活してアルファベットが
-打ててしまう。そこで英数/かなキーの押下を常時観測して英数状態を追跡し、
-日本語ソースに戻る瞬間（選択が効いてから約 120ms 後）に**かなキー
-（keycode 104）**を注入して必ずかな入力で返すようにしている。
-
-撃つべきでないときに撃った確定キーは改行としてアプリに届いてしまうため、
-「怪しいときだけ撃つ」方向に振ってある。推定が外れて撃ち損じたときは
-従来どおり変換中文字列が裏に残るだけで、余計な改行は入らない。
-
-**インジケーターが 2回パチパチすることがある**。日本語から離れるとき、
-確定のために撃った英数キーでことえりが英数状態に入るため、カーソル横に
-まず「ABC」が表示され、その約 60ms 後のソース切り替え表示が 2 回目になる。
-中国語（Return 確定）は IME 内部状態が変わらないので 1 回だけ。
-英数確定をやめると 2 段表示は消えるが、確定が未完のまま切り替わる
-競争が復活して裏残りのバグが再発する。これは見た目ではなくデータのほうを
-取った結果。
-
-## ビルド
-
-```sh
-./Scripts/build-app.sh
-open build/Mozu.app
-```
-
-`swift build` でもデバッグビルドできるが、メニューバー常駐として正しく動かすには
-`.app` バンドルにする（`LSUIElement` と安定した bundle id が必要）。
-
-## Homebrew（このリポジトリが tap を兼ねる）
-
-`Formula/mozu.rb` を置いているので、このリポジトリ自体が tap として使える:
+### Homebrew (this repository is the tap)
 
 ```sh
 brew tap nicokinu/mozu https://github.com/nicokinu/mozu.git
@@ -119,195 +33,74 @@ brew install mozu
 open "$(brew --prefix mozu)/Mozu.app"
 ```
 
-**なぜ cask ではなく formula か**: 配布物には手頃な cask はビルド済み zip を
-ダウンロードするので、ad-hoc 署名・非公証のアプリは Gatekeeper の quarantine で
-「開けません」になる（回避の `xattr -d` は Homebrew 的に原則 NG）。
-formula はユーザーのマシンでビルドするので生成物に quarantine が付かない。
-SwiftPM の依存がゼロなのでビルドにネットワークも要らない。
+The formula builds on your machine (zero SwiftPM dependencies, no network needed), so the app arrives without the macOS quarantine flag and opens normally.
 
-`brew upgrade mozu` で Cellar のパスが変わっても TCC の許可は維持される。
-許可の識別は署名の designated requirement（`identifier "com.nico.mozu"`）で
-パスは関係ないため。これは上の「再ビルドと TCC の許可」の延長線。
+### Zip (GitHub Releases)
 
-### リリース手順
+Download `Mozu-vX.Y.Z.zip` from the releases page and drag `Mozu.app` to `/Applications`.
 
-1. `Resources/Info.plist` の `CFBundleShortVersionString` を上げる
-2. タグを打って push: `git tag vX.Y.Z && git push --tags`
-3. tarball の sha256 を取って formula に反映:
+The build is ad-hoc signed, so a browser-downloaded copy is blocked on first launch ("cannot be opened because the developer cannot be verified"). Either of these passes:
 
-```sh
-curl -sL https://github.com/nicokinu/mozu/archive/refs/tags/vX.Y.Z.tar.gz | shasum -a 256
+- In Finder: **right-click → Open** (once only)
+- In Terminal: `xattr -dr com.apple.quarantine /Applications/Mozu.app`
+
+The brew and zip builds share the same bundle id and designated requirement, so macOS treats them as the same app and your permissions survive a swap.
+
+## Permissions (both are required)
+
+| Permission | Why |
+|---|---|
+| Input Monitoring | observing keystrokes — without it, typing is silently invisible |
+| Accessibility | creating the event tap and injecting the commit keys |
+
+⚠️ **Input Monitoring never shows a prompt.** In the settings window press `Grant…` and System Settings opens — flip Mozu's switch **manually**. With only Accessibility granted, switching itself still works but the pending-composition handling breaks silently, so Mozu starts monitoring only when both are granted.
+
+## First run
+
+1. Menu bar icon → **Settings…**
+2. Under "Status", grant **Accessibility** and **Input Monitoring** (the setting window shows both rows)
+3. Under "Key Assignments", pick an input source for each key
+4. Turn on **Launch at Login**
+
+The menu only lists input sources you have already added in System Settings → Keyboard → Input Sources. Add your languages there first.
+
+Example assignment:
+
+```
+Left Command   → English (ABC)
+Right Command  → Japanese (Hiragana)
+Left Option    → Simplified Chinese (Pinyin)
+Right Option   → Traditional Chinese (Zhuyin/Pinyin)
+Left/Right Control → (spare slots)
 ```
 
-4. `Formula/mozu.rb` の url / sha256 を更新して commit
-5. 手元で反映を確認: `brew update && brew install mozu`（試し直しは `brew fetch --force mozu`）
+<p float="left">
+  <img src="docs/assets/menu.png" width="280" />
+  <img src="docs/assets/settings.png" width="360" />
+</p>
 
-### zip 配布（Release アセット）
+If two input sources share a display name (Kotoeri's romaji and kana modes both show "Hiragana"), Mozu appends an automatic suffix to tell them apart.
 
-ビルド済み zip を配りたいなら **リポジトリにコミットせず**、同じタグの
-**Release アセット**として添付する。git にバイナリを混ぜると履歴に残り続けて
-クローンが重くなる（Homebrew で tarball を引く人まで巻き添え）。`Formula/mozu.rb`
-は GitHub が自動生成する source tarball を使うので、zip を添付しても影響しない。
+## Troubleshooting
 
-```sh
-./Scripts/package-zip.sh   # build/Mozu-vX.Y.Z.zip ができる
-```
-
-Release を同じバージョンのタグで作成し、この zip をドラッグして添付する。
-
-**ダウンロードした側の落とし穴**: ブラウタダウンロードには quarantine が付くので、
-ad-hoc 署名のアプリはダブルクリックだと「開発者を確認できません」で開けない。
-どちらかで通る:
-
-- Finder で **右クリック → 開く**（1 回だけ）
-- もしくはターミナルで `xattr -dr com.apple.quarantine /Applications/Mozu.app`
-
-TCC の識別は designated requirement（`identifier "com.nico.mozu"`）なので、
-一度許可すれば zip 版を差し替えても許可はそのまま。brew 版と zip 版は
-同じ bundle id・同じ DR なので、TCC 上は同じアプリとして扱われる。
-
-## 初回起動
-
-1. メニューバーのアイコン → **設定…**
-2. 「状態」の**アクセシビリティ**と**入力監視**が未許可なら **許可する…** を押し、
-   システム設定 → プライバシーとセキュリティ → それぞれの項目 → Mozu を有効化
-   （**両方必須**。片方だけだと変換中の確定だけが黙って壊れる）。
-   注意: 「入力監視」はアクセシビリティと違い許可ダイアログが出ない。
-   「許可する…」で設定ペインが開くので、Mozu のスイッチを**手動で ON** にする
-3. 「キー割り当て」で各キーに入力ソースを選ぶ
-4. **ログイン時に起動** を ON に
-
-メニューにソースが何も並ばないときは、システム設定 → キーボード → 入力ソースで
-使う言語を追加しておく必要があります。
-
-## 再ビルドと TCC の許可
-
-TCC（アクセシビリティ / 入力監視）はコード署名の**指定要件（designated
-requirement）**でアプリを識別する。ad-hoc 署名は何もしないと cdhash（＝
-バイナリそのもの）が識別子になるため、リビルドのたびに許可が外れて
-「システム設定のスイッチは ON なのに未許可」という幽霊状態になる。
-
-`build-app.sh` は `codesign --requirements` で **identifier のだけ**の
-指定要件を埋め込んでいる（`designated => identifier "com.nico.mozu"`）。
-これはリビルドでバイナリが変わっても不変なので、**一度許可すれば
-再ビルドしても外れない**（実機で確認済み）。
-
-それでも許可が壊れたときの初期化（このアプリだけの許可が戻る）:
+If the switches in System Settings look ON but Mozu still acts ungranted:
 
 ```sh
 tccutil reset Accessibility com.nico.mozu
-tccutil reset ListenEvent com.nico.mozu   # 入力監視
+tccutil reset ListenEvent com.nico.mozu   # Input Monitoring
 ```
 
-## 前提として必要なこと
+then grant both again. Normal rebuilds do **not** revoke permissions: the signature embeds a designated requirement that does not depend on the binary hash.
 
-`TISSelectInputSource` は、**システム設定で「入力ソースとして追加」済みのものしか選択できない**。
-中国語ピンインを選ぶ予定なら、先にシステム設定 → キーボード → 入力ソースで追加しておくこと。
-
-メニューに並ぶのは追加済みの入力ソースだけ（`TISTypeKeyboardLayout` と
-`TISTypeKeyboardInputMode` のみ。絵文字パレットなどは表示されない）。
-
-### 表示名が重複するとき
-
-ことえりのローマ字入力とかな入力の平仮名モードのように、
-**別々の入力ソースが同じ表示名を持つ**ことがある（どちらも「ひらがな」）。
-並んだだけで区別できないと「結局どっちを選べばいいか分からない」ので、
-名前列が重複しているソースには ID の差分接尾辞を自動で添える:
-
-```
-ひらがな（ローマ字入力）
-ひらがな（かな入力）
-```
-
-既知のモード名（`RomajiTyping` / `KanaTyping`）は上の語に翻訳し、
-`Japanese` のような言語名セグメントは冗長なので落とす。未知の IME で
-翻訳できないときは ID の接尾辞をそのまま表示するフォールバックになる。
-
-実際にどちらを選ぶべきかは入力方式による。ローマ字で打って漢字変換する人は `RomajiTyping` 側。
-
-## 韓国語について
-
- Korean の 두벌식 は 1 つのキーボードレイアウトでハングルと英字の両方を入力できるため、
-そもそもこの種の切り替えが必要ない。選んだとして、レイアウトを 1 本に固定したまま
-`Caps Lock` で英字に入る運用のままのはず。
-
-## 構成
-
-```
-Sources/Mozu/
-  MozuApp.swift        アプリ本体・AppDelegate・割り当て永続化
-  ModifierMonitor.swift      単発押しの検出（CGEventTap・セッションレベル）
-  InputSourceManager.swift   TIS API ラッパー（名前列の重複解消込み）
-  CompositionCommit.swift    切り替え前の確定キー注入（Return / 英数 / かな）
-  SourcesStore.swift         入力ソース一覧と現在値の保持
-  KeySlot.swift              割り当て対象 6 キーの定義
-  StatusItemController.swift メニューバー（NSStatusItem + NSMenuDelegate）
-  SettingsView.swift         設定ウィンドウ＝割り当て編集 UI
-  L10n.swift                 UI 文言の参照
-Resources/Info.plist         LSUIElement などのバンドル情報
-Resources/{ja,en,zh-Hans,zh-Hant}.lproj/Localizable.strings
-Scripts/build-app.sh         .app バンドル化 + ad-hoc 署名（cdhash 不変の指定要件付き）
-Scripts/package-zip.sh       Release 添付用の zip 作成（git には入れない）
-Formula/mozu.rb              Homebrew tap 用 formula（このリポジトリが tap を兼ねる）
-```
-
-## 対応言語
-
-UIの対応言語は **ja / en / zh-Hans / zh-Hant の 4 種のみ**。
-想定ユーザーが日本語・中国語(簡体字・繁体字)話者なので、それ以外（キリル文字圏・タイ語など）は作っていません。開発言語を `en` にしてあるため、未知の言語環境では英語にフォールバックする。
-言語切り替え自体は他の言語でもできます(未確認)
-
-`Localizable.strings` のキーは日本語原文そのまま。
-翻訳が引けない環境では自然に日本語が出る、というフォールバック順も兼ねている。
-あるアプリだけ言語を切り替えて確認したいとき:
+## Building from source
 
 ```sh
-defaults write com.nico.mozu AppleLanguages -array en   # 英語で起動し直す
-defaults delete com.nico.mozu AppleLanguages            # OS 設定に戻す
+./Scripts/build-app.sh
+open build/Mozu.app
 ```
 
-入力ソースの名前そのもの（「ひらがな」/「Hiragana」）は TIS が OS の言語設定で
-返すので、このアプリでは翻訳を持たない。
+## Why this design
 
-## なぜメニューだけ AppKit か
+The full story — TIS vs key injection, the pending-composition problem, event tap levels, TCC identity, AppKit vs SwiftUI, release mechanics — lives in [docs/DESIGN.md](docs/DESIGN.md) (Japanese).
 
-SwiftUI の `MenuBarExtra` は、**メニューを開いている最中にコンテンツ内の
-`@Published` が変わるとメニューを再生成し、その瞬間メニューが閉じる**。
-「現在の入力ソース」を表示する以上は状態が変わらないわけにいかないので、
-ここは素の `NSStatusItem` + `NSMenuDelegate` で実装している。
-
-`menuNeedsUpdate:` はメニューが開く**直前**に同期で呼ばれるため、
-そこで状態をいくら更新してもメニューは閉じない。
-
-アプリのライフサイクルも素の `NSApplication`（ `@main` な `static func main()` ）にして、
-設定ウィンドウも `NSWindow` + `NSHostingController` で自前に生成している。
-`Settings` / `Window` シーンに任せる場合、AppKit 側から開く手段が
-`showSettingsWindow:` を responder chain に流す裏技だけになり、
-しかもメインメニューを持たない accessory アプリではそのアクションが
-到達しない（クリックしても何も起きない）。
-
-つまり **メニューバーもウィンドウも AppKit、中身の描画だけ SwiftUI** という割り切り。
-その代わり メインメニューがないので `Cmd+,` や `Cmd+W` は効かない
-（どちらもメニューバーから辿れる）。
-
-## UI の住み分け
-- **メニューバー**: 現在の入力ソース / 今すぐ切り替える / 設定… / ログイン時に起動 / 再起動 / 終了
-- **設定ウィンドウ**: キー割り当て（6 スロット）と権限状態だけ
-
-毎回の操作（今のソース確認と手動切り替え）はメニューに、
-めったにやらない割り当て編集はウィンドウに。設定ウィンドウは 2 click 先なので、
-そこに日常操作を隠すと存在しないのと同じになる。
-
-メニューバーのメニューは項目を選ぶたびに閉じるので、6 スロットの割り当てを
-そこでやると「開く → 選ぶ → 閉じる」を 6 回やることになる。それがウィンドウにした理由。
-
-## 必要権限
-
-**アクセシビリティ**と**入力監視**の 2 つ。役割が違う:
-
-| 権限 | 役割 |
-|---|---|
-| 入力監視（ListenEvent） | keyDown の観測。無いと変換中のタイピングが黙って見えない |
-| アクセシビリティ | `CGEventTap` を張ることと、確定キー（英数/かな/Return）の注入 |
-
-入力を横取りはしない（タップは listenOnly の観測のみ）。
+The UI ships in **ja / en / zh-Hans / zh-Hant**; other locales fall back to English.
