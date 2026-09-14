@@ -2,7 +2,7 @@ class Mozu < Formula
   desc "Modifier-key single-tap input source switcher for macOS"
   homepage "https://github.com/nicokinu/mozu"
   url "https://github.com/nicokinu/mozu/archive/refs/tags/v0.1.0.tar.gz"
-  sha256 "REPLACE_WITH_SHASUM_AFTER_TAGGING"
+  sha256 "9757ab29137d01d6b38ca351e20dc98c1b2487b5004b18e2b3efd8063f0fabf3"
   license "MIT"
 
   # Sources/Mozu は platforms: .macOS(.v14)。Swift は CLT 付属のもので足りる
