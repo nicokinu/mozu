@@ -242,8 +242,14 @@ Sources/Mozu/
   SettingsView.swift         設定ウィンドウ＝割り当て編集 UI
   L10n.swift                 UI 文言の参照
 Resources/Info.plist         LSUIElement などのバンドル情報
+Resources/AppIcon.icns       アプリアイコン（make-icon.sh で再生成可能）
+Resources/icon-1024.png      アイコン原画（Vision で切り抜いた白シルエット版の 1024px PNG）
+Resources/MenuBarIcon.png    メニューバーアイコン（黒シルエットのテンプレート PNG、要コミット）
 Resources/{ja,en,zh-Hans,zh-Hant}.lproj/Localizable.strings
 Scripts/build-app.sh         .app バンドル化 + ad-hoc 署名（cdhash 不変の指定要件付き）
+Scripts/make-icon.swift      元写真 → Vision で前景分割 → アプリアイコン 1024px PNG ＋メニューバー用黒シルエット
+Scripts/make-icon.sh         元写真（Resources/shrike.jpg、git 管理外）→ icon-1024.png / MenuBarIcon.png → AppIcon.icns
+                             写真が無い環境ではコミット済みの生成物を使う
 Scripts/package-zip.sh       Release 添付用の zip 作成（git には入れない）
 Formula/mozu.rb              Homebrew tap 用 formula（このリポジトリが tap を兼ねる）
 docs/DESIGN.md               この文書

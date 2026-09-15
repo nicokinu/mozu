@@ -24,8 +24,9 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     func install() {
-        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        item.button?.image = symbol(trusted: AXIsProcessTrusted())
+        // 鳥は横長（アスペクト比 ~1.3）なので squareLength だと左右が切れる。
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        item.button?.image = menuIcon(trusted: AXIsProcessTrusted())
         menu.delegate = self
         menu.autoenablesItems = false
         item.menu = menu
@@ -33,7 +34,7 @@ final class StatusItemController: NSObject, NSMenuDelegate {
     }
 
     func updateIcon(trusted: Bool) {
-        statusItem?.button?.image = symbol(trusted: trusted)
+        statusItem?.button?.image = menuIcon(trusted: trusted)
     }
 
     // MARK: - NSMenuDelegate
@@ -120,11 +121,58 @@ final class StatusItemController: NSObject, NSMenuDelegate {
         return menuItem
     }
 
-    private func symbol(trusted: Bool) -> NSImage? {
-        let name = trusted ? "globe" : "globe.badge.chevron.backward"
-        let image = NSImage(systemSymbolName: name, accessibilityDescription: "Mozu")
+    /// メニューバーアイコン。アプリアイコンと同じモズシルエット（make-icon.sh 生成）。
+    /// 余白ゼロの tight crop を 15pt 高さに収める（メニューバー一杯だと
+    /// 張り出しすぎるので上下に少し余白を残す。左右はボタンの標準パディング分）。
+    /// 許可済みなら鳥、未許可なら鳥＋斜線。リソースが無ければ SF Symbols、
+    /// それも無ければ globe にフォールバックする。
+    private func menuIcon(trusted: Bool) -> NSImage? {
+        if let base = barIcon() {
+            return trusted ? base : Self.slashed(base)
+        }
+        let names = trusted ? ["bird.fill"] : ["bird.slash", "bird.fill"]
+        for name in names {
+            if let image = NSImage(systemSymbolName: name, accessibilityDescription: "Mozu") {
+                image.isTemplate = true
+                return image
+            }
+        }
+        let image = NSImage(systemSymbolName: trusted ? "globe" : "globe.badge.chevron.backward", accessibilityDescription: "Mozu")
         image?.isTemplate = true
         return image
+    }
+
+    private var cachedBarIcon: NSImage?
+
+    private func barIcon() -> NSImage? {
+        if let cached = cachedBarIcon { return cached }
+        guard let url = Bundle.main.url(forResource: "MenuBarIcon", withExtension: "png"),
+              let image = NSImage(contentsOf: url), image.size.height > 0
+        else { return nil }
+        let height: CGFloat = 15
+        let ratio = image.size.width / image.size.height
+        image.size = NSSize(width: (height * ratio).rounded(), height: height)
+        image.isTemplate = true
+        cachedBarIcon = image
+        return image
+    }
+
+    /// テンプレート画像に斜線を足した「未許可」版（bird.slash 相当）。
+    private static func slashed(_ image: NSImage) -> NSImage {
+        let size = image.size
+        let result = NSImage(size: size)
+        result.lockFocus()
+        image.draw(at: .zero, from: NSRect(origin: .zero, size: size), operation: .sourceOver, fraction: 1)
+        let inset = size.height * 0.06
+        let line = NSBezierPath()
+        line.move(to: NSPoint(x: inset, y: size.height - inset))
+        line.line(to: NSPoint(x: size.width - inset, y: inset))
+        line.lineWidth = max(1.5, size.height * 0.09)
+        NSColor.black.setStroke()
+        line.stroke()
+        result.unlockFocus()
+        result.isTemplate = true
+        return result
     }
 
     // MARK: - Actions

@@ -26,6 +26,12 @@ cp Resources/Info.plist "$APP/Contents/Info.plist"
 mkdir -p "$APP/Contents/Resources"
 cp -R Resources/*.lproj "$APP/Contents/Resources/"
 
+# アプリアイコン（Scripts/make-icon.sh で生成、要コミット）。
+cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
+
+# メニューバーアイコン（同じく make-icon.sh で生成、要コミット）。
+cp Resources/MenuBarIcon.png "$APP/Contents/Resources/MenuBarIcon.png"
+
 codesign --force --sign - --identifier "$IDENTIFIER" \
   --requirements '=designated => identifier "'"$IDENTIFIER"'";' \
   "$APP"
