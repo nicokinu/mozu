@@ -35,12 +35,6 @@ final class ModifierMonitor {
     /// 残っているかもしれないので、切り替え前に確定を挟む必要がある。
     private(set) var hasPendingTyping = false
 
-    /// ことえりが「英数状態」で放置されている（最後に英数キーが押された）。
-    /// 英数/かなは同じ入力ソース内のトグルなので、英数のままソースを離れても
-    /// 状態が残り、「平仮名」を選んでもアルファベットを打ち続けることになる。
-    /// 日本語ソースに戻る瞬間にかなキーを注入して復帰する。
-    private(set) var kanaRestorePending = false
-
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
     private var appActivationObserver: Any?
@@ -132,12 +126,6 @@ final class ModifierMonitor {
         hasPendingTyping = false
     }
 
-    /// 英数注入を「撃った側」でも先に状態へ反映しておくための口。
-    /// 注入イベントのタップ到達を待たずに先へ状態を反映できる。
-    func markKanaRestore(pending: Bool) {
-        kanaRestorePending = pending
-    }
-
     // MARK: - Private
 
     /// タップコールバック本体。タイムアウトで無効化されたときは
@@ -178,14 +166,12 @@ final class ModifierMonitor {
     }
 
     private func handleKeyDown(_ keyCode: UInt16) {
-        if keyCode == CompositionCommit.eisuKeyCode {
-            // 英数キーは marked text を終わらせる（IME が確定してから英数に入る）。
-            // 「英数のまま出た」ことはここで観測できるので、Return 系の
-            // hasPendingTyping とちがって注入の撃ち漏らし問題はない。
-            if InputSourceManager.currentSourceIsJapanese() { kanaRestorePending = true }
-            hasPendingTyping = false
-        } else if keyCode == CompositionCommit.kanaKeyCode {
-            if InputSourceManager.currentSourceIsJapanese() { kanaRestorePending = false }
+        if keyCode == CompositionCommit.eisuKeyCode || keyCode == CompositionCommit.kanaKeyCode {
+            // 英数/かなキーは IME が確定してから状態をトグルする。どちらも
+            // marked text を終わらせるので確定待ちだけ下ろす。
+            // （英数/かなトグル自体は入力ソース ID に反映されないため、
+            // 追跡しても外部からの変更（Caps Lock 英数など）で見逃す。
+            // 復帰は「日本語ソースを選ぶたび必ずかなキー注入」側で行う）
             hasPendingTyping = false
         } else if Self.endingKeyCodes.contains(keyCode) {
             // Return/Enter は確定、Escape は取り消し。どちらも marked text を

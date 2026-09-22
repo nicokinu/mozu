@@ -49,6 +49,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
     private var trustPollingTask: Task<Void, Never>?
     private var settingsWindow: NSWindow?
     private var pendingSwitch: DispatchWorkItem?
+    private var pendingKana: DispatchWorkItem?
+    private var pendingVerify: DispatchWorkItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // メニューバー常駐だけなので Dock には出さない。
@@ -101,6 +103,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         monitor.clearPendingTyping()
         pendingSwitch?.cancel()
+        pendingKana?.cancel()
+        pendingVerify?.cancel()
 
         guard needsCommit else {
             applySelect(id: id)
@@ -109,13 +113,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
 
         // 日本語 IME は Return 注入でも確定しきれない（確定が非同期で切り替えが
         // 先に走る）。英かなと同じく英数キーを撃って IME 自身に確定させる。
-        // 代償として英数状態になるので、日本語ソースに戻る側でかなキーを戻す。
         let japanese = InputSourceManager.currentSourceIsJapanese()
 
         if japanese {
             CompositionCommit.commitByEisu()
-            // 注入イベントのモニタ到達を待たずに先へ状態を反映しておく。
-            monitor.markKanaRestore(pending: true)
         } else {
             CompositionCommit.commit()
         }
@@ -126,10 +127,37 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // 少し待ってから選択する。速さより順序が目的なので、短くして
         // 裏残りが再発したら戻す。
         let work = DispatchWorkItem { [weak self] in
-            self?.applySelect(id: id)
+            guard let self else { return }
+            self.applySelect(id: id)
+            // 確定が確定より後に着弾すると、IME がセッションを自分に引き戻して
+            // 「英語を選んだのに日本語が入力される」裏戻りが起きうる。一瞬後に照合する。
+            self.scheduleRevertCheck(from: current, to: id)
         }
         pendingSwitch = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.06, execute: work)
+    }
+
+    /// 確定を伴う切り替えの一瞬後、選択が裏戻りしていないか照合する。
+    ///
+    /// ことえりの確定は本当に非同期で、確定処理が TISSelectInputSource より後に
+    /// 着弾するとセッションがことえりに引き戻されることがある（実測で「ABC を
+    /// 選んだのに打ち出しが日本語になる」）。その頃には確定も済んでいるので、
+    /// もう一度選べば戻されない。
+    ///
+    /// 「現在のソースが切り替え元そのもの」のときだけ再選択する。ユーザーが
+    /// その 0.3 秒のあいだに ⌘Space などで third のソースへ移っている場合
+    /// （＝裏戻りではなく自前の選択）を巻き添えにしないため。
+    private func scheduleRevertCheck(from original: String?, to id: String) {
+        let work = DispatchWorkItem { [weak self] in
+            guard let self else { return }
+            self.pendingVerify = nil
+            let now = InputSourceManager.currentSourceID()
+            guard now != id, now == original else { return }
+            NSLog("Mozu: input source selection reverted to %@; re-selecting %@", now ?? "nil", id)
+            self.applySelect(id: id)
+        }
+        pendingVerify = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
     }
 
     private func applySelect(id: String) {
@@ -143,15 +171,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         }
         store.refreshCurrent()
 
-        // 英数のまま離れたことえりを「平仮名」で選び直しても、英数状態が
-        // 永続化しているだけなのでアルファベットを打ち続けることになる。
-        // 英数のまま出た観測があれば、かなキーを注入してかな入力に戻す。
+        // ことえりの英数/かな状態は入力ソース ID に反映されないので、外部で
+        // 変わった分まで観測するのは不可能（Caps Lock 英数切替・mozu 非起動中の
+        // 英数キーなど）。なので日本語ソースを選んだときはフラグを見ずに毎回
+        // 必ずかなキーを撃つ。かなキーはかなモードでは IME が消費するだけの実質
+        // no-op なので、無条件撃ちは幂等で安全。
         // （注入は選択が確定してからでないとことえりに拾われない）
-        if monitor.kanaRestorePending && InputSourceManager.isJapaneseSource(id: id) {
-            monitor.markKanaRestore(pending: false)
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) {
-                CompositionCommit.restoreKanaMode()
-            }
+        if InputSourceManager.isJapaneseSource(id: id) {
+            let work = DispatchWorkItem { CompositionCommit.restoreKanaMode() }
+            pendingKana = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
         }
     }
 
