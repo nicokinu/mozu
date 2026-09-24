@@ -174,11 +174,22 @@ final class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         // ことえりの英数/かな状態は入力ソース ID に反映されないので、外部で
         // 変わった分まで観測するのは不可能（Caps Lock 英数切替・mozu 非起動中の
         // 英数キーなど）。なので日本語ソースを選んだときはフラグを見ずに毎回
-        // 必ずかなキーを撃つ。かなキーはかなモードでは IME が消費するだけの実質
-        // no-op なので、無条件撃ちは幂等で安全。
-        // （注入は選択が確定してからでないとことえりに拾われない）
+        // 必ずかなキーを撃つ。ただし撃つのは「まだ何も打っていない」ことが
+        // 確かなときだけ。変換中（marked text が生きている）ところにかなキーを
+        // 落とすと、打ちかけのローマ字を勝手に「変換」してしまう
+        // （実測で「日本語ボタンを押すとカーソル位置の英語が変換された」）。
+        // 選択が確定してからでないとことえりに拾われないので少し待つ。
         if InputSourceManager.isJapaneseSource(id: id) {
-            let work = DispatchWorkItem { CompositionCommit.restoreKanaMode() }
+            let work = DispatchWorkItem { [weak self] in
+                guard let self else { return }
+                self.pendingKana = nil
+                // 選択後にユーザーが打っていれば marked text が生きているかも
+                // しれない。復帰を待つより直撃を避けるほうが重要なので見送る。
+                guard !self.monitor.hasPendingTyping else { return }
+                // 選択後に ⌘Space などで他所へ移っていたら撃たない。
+                guard InputSourceManager.currentSourceID() == id else { return }
+                CompositionCommit.restoreKanaMode()
+            }
             pendingKana = work
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.12, execute: work)
         }
