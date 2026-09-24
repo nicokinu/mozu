@@ -3,7 +3,3 @@ build/
 .DS_Store
 *.xcodeproj
 .swiftpm/
-
-# 元写真（ウォーターマーク付きの出所不明写真）はリポジトリに入れない。
-# あってもなくてもビルドできる（make-icon.sh がResources/icon-1024.png にフォールバック）。
-Resources/shrike.jpg

@@ -243,13 +243,16 @@ Sources/Mozu/
   L10n.swift                 UI 文言の参照
 Resources/Info.plist         LSUIElement などのバンドル情報
 Resources/AppIcon.icns       アプリアイコン（make-icon.sh で再生成可能）
-Resources/icon-1024.png      アイコン原画（Vision で切り抜いた白シルエット版の 1024px PNG）
+Resources/icon-art.png       アプリアイコン原画（ChatGPT 生成の絵、吹き出し入り。コミットして原画扱い）
+Resources/menubar-art.png    メニューバー原画（吹き出しなし版。輝度しきいで黒シルエット化）
+Resources/icon-1024.png      原画から生成した 1024px PNG（iconset の入口、要コミット）
 Resources/MenuBarIcon.png    メニューバーアイコン（黒シルエットのテンプレート PNG、要コミット）
 Resources/{ja,en,zh-Hans,zh-Hant}.lproj/Localizable.strings
 Scripts/build-app.sh         .app バンドル化 + ad-hoc 署名（cdhash 不変の指定要件付き）
-Scripts/make-icon.swift      元写真 → Vision で前景分割 → アプリアイコン 1024px PNG ＋メニューバー用黒シルエット
-Scripts/make-icon.sh         元写真（Resources/shrike.jpg、git 管理外）→ icon-1024.png / MenuBarIcon.png → AppIcon.icns
-                             写真が無い環境ではコミット済みの生成物を使う
+Scripts/make-menubar-icon.swift  メニューバー原画 → 黒シルエット＋alpha の tight crop テンプレート
+Scripts/make-icon.sh         icon-art.png → 1024px PNG → iconset → AppIcon.icns
+                             menubar-art.png → MenuBarIcon.png（高さ 36px）
+                             原画が無い環境ではコミット済みの生成物を使う
 Scripts/package-zip.sh       Release 添付用の zip 作成（git には入れない）
 Formula/mozu.rb              Homebrew tap 用 formula（このリポジトリが tap を兼ねる）
 docs/DESIGN.md               この文書
